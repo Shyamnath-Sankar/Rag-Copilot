@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Question Answering System</title>
+    <!-- RAG Chat Widget -->
+    <link rel="stylesheet" href="http://172.16.27.32:8080/static/widget.css">
+    <script src="http://172.16.27.32:8080/static/widget.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .upload-section, .question-section {
+            margin-bottom: 20px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        input[type="file"], input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #response {
+            margin-top: 20px;
+            padding: 15px;
+            border-left: 4px solid #4CAF50;
+            background-color: #f9f9f9;
+            display: none;
+        }
+        .loading {
+            text-align: center;
+            margin: 20px 0;
+            display: none;
+        }
+        .error {
+            color: #d32f2f;
+            background-color: #ffebee;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            display: none;
+        }
+        .current-pdf {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #e8f5e9;
+            border-radius: 4px;
+            display: none;
+        }
+        .pdf-info {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .delete-btn {
+            background-color: #f44336;
+        }
+        .delete-btn:hover {
+            background-color: #d32f2f;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>PDF Question Answering System</h1>
+        
+        <div class="upload-section">
+            <h2>Upload PDF</h2>
+            <form id="uploadForm">
+                <input type="file" name="pdf_file" accept=".pdf" required>
+                <button type="submit">Upload PDF</button>
+            </form>
+            <div id="uploadError" class="error"></div>
+            <div id="currentPdf" class="current-pdf">
+                <div class="pdf-info">
+                    <div>
+                        <strong>Current PDF: </strong><span id="pdfName"></span>
+                        <br>
+                        <small id="pdfDetails"></small>
+                    </div>
+                    <button class="delete-btn" onclick="clearPdf()">Clear PDF</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="question-section">
+            <h2>Ask a Question</h2>
+            <form id="questionForm">
+                <input type="text" name="question" placeholder="Type your question here..." required>
+                <button type="submit">Ask Question</button>
+            </form>
+            <div id="questionError" class="error"></div>
+        </div>
+
+        <div id="loading" class="loading">Processing...</div>
+        <div id="response"></div>
+    </div>
+
+    <script>
+        let currentPdfInfo = null;
+        // Use the current URL as the base for API calls
+        const SERVER_URL = window.location.origin;
+        console.log('Using server URL:', SERVER_URL); // Debug log
+
+        function updatePdfDisplay(info) {
+            const currentPdfDiv = document.getElementById('currentPdf');
+            const pdfNameSpan = document.getElementById('pdfName');
+            const pdfDetailsSpan = document.getElementById('pdfDetails');
+            
+            if (info) {
+                currentPdfDiv.style.display = 'block';
+                pdfNameSpan.textContent = info.filename;
+                pdfDetailsSpan.textContent = `Pages: ${info.pages} | Chunks: ${info.chunks}`;
+                currentPdfInfo = info;
+            } else {
+                currentPdfDiv.style.display = 'none';
+                currentPdfInfo = null;
+            }
+        }
+
+        async function clearPdf() {
+            const loadingDiv = document.getElementById('loading');
+            const errorDiv = document.getElementById('uploadError');
+            
+            try {
+                loadingDiv.style.display = 'block';
+                errorDiv.style.display = 'none';
+                
+                // Clear the current PDF display
+                updatePdfDisplay(null);
+                
+                // Reset the file input
+                document.querySelector('input[type="file"]').value = '';
+                
+            } catch (error) {
+                errorDiv.textContent = error.message;
+                errorDiv.style.display = 'block';
+            } finally {
+                loadingDiv.style.display = 'none';
+            }
+        }
+
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const loadingDiv = document.getElementById('loading');
+            const errorDiv = document.getElementById('uploadError');
+            const responseDiv = document.getElementById('response');
+
+            try {
+                loadingDiv.style.display = 'block';
+                errorDiv.style.display = 'none';
+                responseDiv.style.display = 'none';
+
+                console.log('Uploading to:', SERVER_URL + '/upload'); // Debug log
+
+                const response = await fetch(SERVER_URL + '/upload', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include',
+                    mode: 'cors',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+
+                console.log('Upload response status:', response.status); // Debug log
+
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || 'Upload failed');
+                }
+
+                updatePdfDisplay(result);
+                
+                responseDiv.innerHTML = `
+                    <h3>Upload Success</h3>
+                    <p>File: ${result.filename}</p>
+                    <p>Pages: ${result.pages}</p>
+                    <p>Chunks: ${result.chunks}</p>
+                `;
+                responseDiv.style.display = 'block';
+            } catch (error) {
+                console.error('Upload error:', error); // Debug log
+                errorDiv.textContent = 'Error: ' + error.message;
+                errorDiv.style.display = 'block';
+            } finally {
+                loadingDiv.style.display = 'none';
+            }
+        });
+
+        document.getElementById('questionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const loadingDiv = document.getElementById('loading');
+            const errorDiv = document.getElementById('questionError');
+            const responseDiv = document.getElementById('response');
+
+            if (!currentPdfInfo) {
+                errorDiv.textContent = 'Please upload a PDF first before asking questions.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            try {
+                loadingDiv.style.display = 'block';
+                errorDiv.style.display = 'none';
+                responseDiv.style.display = 'none';
+
+                console.log('Sending question to:', SERVER_URL + '/ask'); // Debug log
+
+                const response = await fetch(SERVER_URL + '/ask', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include',
+                    mode: 'cors',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+
+                console.log('Question response status:', response.status); // Debug log
+
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to get answer');
+                }
+
+                responseDiv.innerHTML = `
+                    <h3>Answer</h3>
+                    <p>${result.answer}</p>
+                    ${result.sources && result.sources.length > 0 ? `
+                        <h4>Sources</h4>
+                        <ul>
+                            ${result.sources.map(source => `
+                                <li>
+                                    <strong>${source.source}</strong>
+                                    <p>${source.page_content}</p>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    ` : ''}
+                `;
+                responseDiv.style.display = 'block';
+            } catch (error) {
+                console.error('Question error:', error); // Debug log
+                errorDiv.textContent = 'Error: ' + error.message;
+                errorDiv.style.display = 'block';
+            } finally {
+                loadingDiv.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>

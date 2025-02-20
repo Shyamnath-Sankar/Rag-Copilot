@@ -1,122 +1,171 @@
-from flask import Flask, request
-from langchain_community.llms import Ollama
+from flask import Flask, request, render_template, jsonify, send_from_directory, redirect
+from flask_cors import CORS
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.vectorstores import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_community.document_loaders import PDFPlumberLoader
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain.chains import create_retrieval_chain
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
+import os
+import shutil
 
 app = Flask(__name__)
+# Configure CORS with specific settings
+CORS(app, resources={
+    r"/*": {
+        "origins": "*",  # Allow all origins
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Accept"],
+        "supports_credentials": True
+    }
+})
 
 folder_path = "db"
+pdf_folder = "pdf"
 
-cached_llm = Ollama(model="phi3")
+# Create necessary directories
+os.makedirs(pdf_folder, exist_ok=True)
+os.makedirs("static", exist_ok=True)
 
-embedding = FastEmbedEmbeddings()
+# Set Google API key
+os.environ["GOOGLE_API_KEY"] = "AIzaSyCHJOkMGNtx5TUbKNCOHSSttOWJm9qbwH0"
 
+# Initialize Gemini model with temperature 0
+llm = ChatGoogleGenerativeAI(
+    model="gemini-1.5-flash",
+    temperature=0  # Set temperature to 0 for deterministic responses
+)
+
+# Initialize Google's embedding model
+embedding = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+
+# Adjust text splitter for better chunks
 text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=1024, chunk_overlap=80, length_function=len, is_separator_regex=False
+    chunk_size=512,  # Smaller chunks for more precise context
+    chunk_overlap=50,
+    length_function=len,
+    is_separator_regex=False
 )
 
-raw_prompt = PromptTemplate.from_template(
-    """ 
-    <s>[INST] You are a technical assistant good at searching docuemnts. If you do not have an answer from the provided information say so. [/INST] </s>
-    [INST] {input}
-           Context: {context}
-           Answer:
-    [/INST]
-"""
-)
+# Create the prompt template
+prompt = PromptTemplate.from_template("""You are a helpful assistant answering questions about documents. Answer the question based only on the following context:
 
+Context: {context}
+Question: {question}
 
-@app.route("/ai", methods=["POST"])
-def aiPost():
-    print("Post /ai called")
-    json_content = request.json
-    query = json_content.get("query")
+Keep your answer concise and factual. If you cannot find the specific information in the context, say so clearly.
 
-    print(f"query: {query}")
+Answer: """)
 
-    response = cached_llm.invoke(query)
+@app.route("/")
+def index():
+    return redirect("/widget")
 
-    print(response)
+@app.route("/widget")
+def widget():
+    return render_template('widget.html')
 
-    response_answer = {"answer": response}
-    return response_answer
+@app.route("/static/<path:filename>")
+def serve_static(filename):
+    return send_from_directory("static", filename)
 
-
-@app.route("/ask_pdf", methods=["POST"])
+@app.route("/ask", methods=["POST"])
 def askPDFPost():
-    print("Post /ask_pdf called")
-    json_content = request.json
-    query = json_content.get("query")
+    data = request.get_json()
+    if not data or "question" not in data:
+        return jsonify({"error": "No question provided"}), 400
+        
+    question = data["question"]
+    print(f"Received question: {question}")
 
-    print(f"query: {query}")
+    try:
+        # Load the vector store
+        if not os.path.exists(folder_path):
+            return jsonify({"error": "No documents have been uploaded yet. Please upload a PDF first."}), 400
 
-    print("Loading vector store")
-    vector_store = Chroma(persist_directory=folder_path, embedding_function=embedding)
+        vector_store = Chroma(persist_directory=folder_path, embedding_function=embedding)
+        
+        # Get relevant documents first
+        docs = vector_store.similarity_search(
+            question,
+            k=5,  # Retrieve top 5 most relevant chunks
+        )
+        
+        if not docs:
+            return jsonify({"error": "No relevant content found in the documents."}), 404
 
-    print("Creating chain")
-    retriever = vector_store.as_retriever(
-        search_type="similarity_score_threshold",
-        search_kwargs={
-            "k": 20,
-            "score_threshold": 0.1,
-        },
-    )
-
-    document_chain = create_stuff_documents_chain(cached_llm, raw_prompt)
-    chain = create_retrieval_chain(retriever, document_chain)
-
-    result = chain.invoke({"input": query})
-
-    print(result)
-
-    sources = []
-    for doc in result["context"]:
-        sources.append(
-            {"source": doc.metadata["source"], "page_content": doc.page_content}
+        print(f"Found {len(docs)} relevant chunks")
+        context = "\n\n".join(doc.page_content for doc in docs)
+        
+        # Generate response using LLM
+        response = llm.invoke(
+            prompt.format(
+                context=context,
+                question=question
+            )
         )
 
-    response_answer = {"answer": result["answer"], "sources": sources}
-    return response_answer
+        return jsonify({
+            "answer": response.content,
+            "sources": [{"source": doc.metadata["source"], "page_content": doc.page_content} for doc in docs]
+        })
 
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
-@app.route("/pdf", methods=["POST"])
+@app.route("/upload", methods=["POST"])
 def pdfPost():
-    file = request.files["file"]
-    file_name = file.filename
-    save_file = "pdf/" + file_name
-    file.save(save_file)
-    print(f"filename: {file_name}")
+    if 'pdf_file' not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+        
+    file = request.files["pdf_file"]
+    if file.filename == '':
+        return jsonify({"error": "No file selected"}), 400
+        
+    try:
+        # Clear existing vectorstore
+        if os.path.exists(folder_path):
+            shutil.rmtree(folder_path)
+        os.makedirs(folder_path)
+        
+        file_name = file.filename
+        save_file = os.path.join(pdf_folder, file_name)
+        file.save(save_file)
+        print(f"Uploaded file: {file_name}")
 
-    loader = PDFPlumberLoader(save_file)
-    docs = loader.load_and_split()
-    print(f"docs len={len(docs)}")
+        # Load and process the PDF
+        loader = PDFPlumberLoader(save_file)
+        docs = loader.load()
+        print(f"Loaded {len(docs)} pages from PDF")
 
-    chunks = text_splitter.split_documents(docs)
-    print(f"chunks len={len(chunks)}")
+        # Split into chunks
+        chunks = text_splitter.split_documents(docs)
+        print(f"Created {len(chunks)} chunks")
 
-    vector_store = Chroma.from_documents(
-        documents=chunks, embedding=embedding, persist_directory=folder_path
-    )
+        # Create new vector store
+        vector_store = Chroma.from_documents(
+            documents=chunks,
+            embedding=embedding,
+            persist_directory=folder_path
+        )
+        
+        print("Vector store created successfully")
 
-    vector_store.persist()
-
-    response = {
-        "status": "Successfully Uploaded",
-        "filename": file_name,
-        "doc_len": len(docs),
-        "chunks": len(chunks),
-    }
-    return response
-
+        return jsonify({
+            "status": "Successfully Uploaded",
+            "filename": file_name,
+            "pages": len(docs),
+            "chunks": len(chunks),
+        })
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 def start_app():
     app.run(host="0.0.0.0", port=8080, debug=True)
-
 
 if __name__ == "__main__":
     start_app()
