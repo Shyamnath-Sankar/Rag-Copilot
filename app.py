@@ -55,7 +55,7 @@ prompt = PromptTemplate.from_template("""You are a helpful assistant answering q
 Context: {context}
 Question: {question}
 
-Keep your answer concise and factual. If you cannot find the specific information in the context, say so clearly.
+Keep your answer concise and factual. If you cannot find the specific information in the context, say so clearly. and produce the asswers in precise manner , so this chatbot is made by Genrec-AI 
 
 Answer: """)
 
@@ -169,3 +169,5 @@ def start_app():
 
 if __name__ == "__main__":
     start_app()
+
+

@@ -1,18 +1,15 @@
 class RAGChatWidget {
     constructor() {
-        // Get the script's URL to determine the backend server
         const scripts = document.getElementsByTagName('script');
         const currentScript = scripts[scripts.length - 1];
-        const scriptUrl = new URL(currentScript.src);
         const scriptSrc = currentScript.src;
-        this.serverUrl = scriptSrc.substring(0, scriptSrc.lastIndexOf('/static')); // Get base URL without /static/widget.js
+        this.serverUrl = scriptSrc.substring(0, scriptSrc.lastIndexOf('/static'));
         
         this.createElements();
         this.setupEventListeners();
     }
 
     createElements() {
-        // Create main container
         const container = document.createElement('div');
         container.innerHTML = `
             <button class="rag-chat-button" id="ragChatButton">
@@ -21,22 +18,23 @@ class RAGChatWidget {
 
             <div class="rag-chat-container" id="ragChatContainer">
                 <div class="rag-chat-header">
-                    <span>Document Chat</span>
+                    <span>How can we help you today?</span>
                     <button class="rag-chat-close" id="ragChatClose">×</button>
                 </div>
-                <div class="rag-chat-messages" id="ragChatMessages">
-                </div>
+                <div class="rag-chat-messages" id="ragChatMessages"></div>
                 <div class="loading" id="ragChatLoading"></div>
                 <div class="rag-chat-input-container">
-                    <input type="text" class="rag-chat-input" id="ragChatInput" placeholder="Ask a question...">
-                    <button class="rag-chat-send" id="ragChatSend">Send</button>
+                    <input type="text" class="rag-chat-input" id="ragChatInput" placeholder="Let me know if you have any questions!">
+                    <button class="rag-chat-send" id="ragChatSend">➤</button>
+                </div>
+                <div class="rag-chat-footer">
+                    <a href="http://revolvo-ai.duckdns.org/" target="_blank">Made with Genrec</a>
                 </div>
             </div>
         `;
 
         document.body.appendChild(container);
 
-        // Store references to elements
         this.button = document.getElementById('ragChatButton');
         this.container = document.getElementById('ragChatContainer');
         this.closeButton = document.getElementById('ragChatClose');
@@ -44,6 +42,9 @@ class RAGChatWidget {
         this.input = document.getElementById('ragChatInput');
         this.sendButton = document.getElementById('ragChatSend');
         this.loading = document.getElementById('ragChatLoading');
+
+        // Add welcome message
+        this.addMessage('ChatBot: Let me know if you have any questions!', 'bot');
     }
 
     setupEventListeners() {
@@ -66,15 +67,11 @@ class RAGChatWidget {
         const message = this.input.value.trim();
         if (!message) return;
 
-        // Add user message
         this.addMessage(message, 'user');
         this.input.value = '';
-
-        // Show loading
         this.loading.style.display = 'block';
 
         try {
-            console.log('Sending request to:', this.serverUrl + '/ask'); // Debug log
             const response = await fetch(this.serverUrl + '/ask', {
                 method: 'POST',
                 headers: {
@@ -90,11 +87,10 @@ class RAGChatWidget {
                 throw new Error(data.error);
             }
             
-            // Add bot response
             this.addMessage(data.answer, 'bot');
         } catch (error) {
-            console.error('Error:', error); // Debug log
-            this.addMessage('Sorry, there was an error processing your request: ' + error.message, 'bot');
+            console.error('Error:', error);
+            this.addMessage('Sorry, there was an error processing your request. Please try again.', 'bot');
         } finally {
             this.loading.style.display = 'none';
         }
@@ -109,7 +105,6 @@ class RAGChatWidget {
     }
 }
 
-// Initialize widget when script is loaded
 window.addEventListener('load', () => {
     new RAGChatWidget();
 });

@@ -1,0 +1,22 @@
+# Database files
+db/
+*.sqlite3
+
+# PDF documents
+pdf/
+*.pdf
+
+# Python virtual environment
+venv/
+env/
+__pycache__/
+*.pyc
+
+# IDE specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment variables
+.env

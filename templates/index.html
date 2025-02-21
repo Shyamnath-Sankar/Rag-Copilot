@@ -178,6 +178,7 @@
             const responseDiv = document.getElementById('response');
 
             try {
+                loadingDiv.textContent = 'Processing PDF... This may take a few moments.';
                 loadingDiv.style.display = 'block';
                 errorDiv.style.display = 'none';
                 responseDiv.style.display = 'none';

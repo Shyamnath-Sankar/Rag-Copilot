@@ -76,9 +76,7 @@
     </div>
 
     <div class="important-note">
-        <strong>Important:</strong> Make sure to always use the complete URL with your server's IP address when embedding:
-        <br>
-        Example: <code>http://172.16.18.207:8080</code>
+        <strong>Important:</strong> The widget is configured to connect to: <code>http://172.16.17.67:8080</code>
     </div>
 
     <p>Copy and paste this code into any website where you want to add the RAG Chat widget:</p>
@@ -104,8 +102,8 @@
 
     <!-- Load the actual widget for demo -->
     <script>
-        // Get the current server URL
-        const serverBase = window.location.protocol + '//' + window.location.host;
+        // Set the server URL to the specified IP
+        const serverBase = 'http://172.16.17.67:8080';
 
         async function uploadPDF() {
             const fileInput = document.getElementById('pdfFile');
@@ -154,7 +152,7 @@
             });
         }
 
-        // Generate embed code with the current domain
+        // Generate embed code with the specified IP
         const embedCode = `<!-- RAG Chat Widget -->\n<link rel="stylesheet" href="${serverBase}/static/widget.css">\n<script src="${serverBase}/static/widget.js"><\/script>`;
 
         // When the page loads
@@ -169,4 +167,5 @@
     <script src="/static/widget.js"></script>
 </body>
 </html>
+
 
