@@ -18,7 +18,7 @@ CORS(app, resources={
         "origins": "*",  # Allow all origins
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type", "Accept"],
-        "supports_credentials": True
+        "supports_credentials": False  # Changed to False since we're allowing all origins
     }
 })
 
@@ -125,6 +125,10 @@ def pdfPost():
     if file.filename == '':
         return jsonify({"error": "No file selected"}), 400
         
+    # Validate file type
+    if not file.filename.lower().endswith('.pdf'):
+        return jsonify({"error": "Invalid file type. Please upload a PDF file."}), 400
+        
     try:
         # Clear existing vectorstore
         if os.path.exists(folder_path):
@@ -165,7 +169,7 @@ def pdfPost():
         return jsonify({"error": str(e)}), 500
 
 def start_app():
-    app.run(host="0.0.0.0", port=8080, debug=True)
+    app.run(host="172.22.192.1", port=80, debug=True)
 
 if __name__ == "__main__":
     start_app()
