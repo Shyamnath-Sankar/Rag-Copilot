@@ -76,7 +76,7 @@
     </div>
 
     <div class="important-note">
-        <strong>Important:</strong> The widget is configured to connect to: <code>http://172.16.17.67:8080</code>
+        <strong>Important:</strong> The widget is configured to connect to the same server where it's hosted.
     </div>
 
     <p>Copy and paste this code into any website where you want to add the RAG Chat widget:</p>
@@ -103,7 +103,7 @@
     <!-- Load the actual widget for demo -->
     <script>
         // Set the server URL to the specified IP
-        const serverBase = 'http://172.22.192.1:80';
+        const serverBase = window.location.origin;
 
         async function uploadPDF() {
             const fileInput = document.getElementById('pdfFile');

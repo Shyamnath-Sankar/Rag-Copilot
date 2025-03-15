@@ -55,7 +55,7 @@ prompt = PromptTemplate.from_template("""You are a helpful assistant answering q
 Context: {context}
 Question: {question}
 
-Keep your answer concise and factual. If you cannot find the specific information in the context, say so clearly. and produce the asswers in precise manner , so this chatbot is made by Genrec-AI 
+Keep your answer concise and factual. If you cannot find the specific information in the context, say so clearly. and produce the answers in precise manner , so this chatbot is made by Genrec-AI 
 
 Answer: """)
 
@@ -129,6 +129,7 @@ def pdfPost():
     if not file.filename.lower().endswith('.pdf'):
         return jsonify({"error": "Invalid file type. Please upload a PDF file."}), 400
         
+    save_file = None
     try:
         # Clear existing vectorstore
         if os.path.exists(folder_path):
@@ -167,9 +168,12 @@ def pdfPost():
     except Exception as e:
         print(f"Error: {str(e)}")
         return jsonify({"error": str(e)}), 500
+    finally:
+        if save_file and os.path.exists(save_file):
+            os.remove(save_file)
 
 def start_app():
-    app.run(host="172.22.192.1", port=80, debug=True)
+    app.run(host="0.0.0.0", port=80, debug=True)
 
 if __name__ == "__main__":
     start_app()
